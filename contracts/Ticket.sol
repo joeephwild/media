@@ -48,10 +48,6 @@ contract Ticket is  ERC1155URIStorage, ERC1155Supply {
         _;
     }
 
-    function updateListPrice(uint256 _listPrice) public onlyOwner {
-        listingPrice = _listPrice;
-    }
-
     function getListingPrice() public view returns (uint256) {
         return listingPrice;
     }
@@ -183,13 +179,12 @@ contract Ticket is  ERC1155URIStorage, ERC1155Supply {
         uint price = idToListedTicket[tokenId].price * _quantity;
         require(msg.value >= price, "pls submit the asking price");
         require(_quantity < idToListedTicket[tokenId].initialSupply, "you cant purchase more");
-        require(totalSupply() < idToListedTicket[tokenId].initialSupply, "sold out sorry");
         //specifying the percentage fee
-        uint256 artistPercentage = 98;
-        uint256 ownerPercentage = 2;
+        uint256 artistPercentageshare = 98;
+        uint256 ownerPercentageshare = 2;
         //calculating the specific fee
-        uint256 artistFee = (price * artistPercentage) / 100;
-        uint256 ownerFee = (price * ownerPercentage) / 100;
+        uint256 artistFee = msg.value * artistPercentageshare / 100;
+        uint256 ownerFee = msg.value * ownerPercentageshare / 100;
         Payment storage purchase = paymentStruct[msg.sender];
         purchase.quantity = _quantity;
         purchase.purchaser = msg.sender;
