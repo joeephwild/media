@@ -34,9 +34,10 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => mapping(address => uint256)) public bids;
-    // mapping(uint256 => address) public highestBidder;
-    address public highestBidder;
-	uint    public highestBid;
+    mapping(uint256 => address) public highestBidder;
+    mapping(uint256 => uint256) public highestBid;
+    // address public highestBidder;
+	// uint    public highestBid;
     uint private bidCount = 0;
     uint private revealedCount = 0;
 
@@ -133,8 +134,6 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         console.log("bids",bids[listingId][msg.sender]);
         console.log("listing.price",listing.price);
 
-        // bids[listingId][msg.sender] += msg.value;
-        // highestBidder[listingId] = msg.sender;
         uint256 incentive = listing.price / minAuctionIncrement;
         listing.price = listing.price + incentive;
         
@@ -152,9 +151,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         uint value = _value;
         string memory passcode = _passcode;
         require(myBid.sealedBid == keccak256(abi.encodePacked(value, passcode, msg.sender)),"The sealedBid doesn't match the hash");
-        /// @notice .encode -> .encodePacked
         if(myBid.depositAmt == value){
-            //if this is a valid bid
 			myBid.sealedBid = bytes32(0);
 			if(!checkBid(listingId,msg.sender, value)) { 
                 payable(msg.sender).transfer(myBid.depositAmt); 
@@ -167,17 +164,18 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         uint value = _value;
         address bidder = _bidder;
        // console.log("buisness exp", highestBid);
-        if (value < highestBid){
+        if (value < highestBid[listingId]){
             bids[listingId][payable(msg.sender)] = value;
             return false;       //not a higher bid
         }
 
-        if (highestBidder != address(0)) {                  
-           bids[listingId][highestBidder] += highestBid; 
+        if (highestBidder[listingId] != address(0)) {                  
+           bids[listingId][highestBidder[listingId]] += highestBid[listingId]; 
            //console.log("kourtorepally only fresh seeyou tonight guys");
         }
-        highestBid = value;                                 
-        highestBidder = bidder;
+        //bids[listingId][msg.sender] = value; 
+        highestBid[listingId] = value;                                
+        highestBidder[listingId] = bidder;
         return true;                   //a higher bid
     }
 
@@ -185,7 +183,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         require(!isAuctionOpen(listingId), 'auction is still open');
 
         Listing storage listing = listings[listingId];
-        address winner = highestBidder; 
+        address winner = highestBidder[listingId]; 
         require(
             msg.sender == listing.seller || msg.sender == winner, 
             'only seller or winner can complete auction'
@@ -210,7 +208,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     function withdrawBid(uint256 listingId) public payable nonReentrant {
         require(isAuctionExpired(listingId), 'auction must be ended');
-        require(highestBidder != msg.sender, 'highest bidder cannot withdraw bid');
+        require(highestBidder[listingId] != msg.sender, 'highest bidder cannot withdraw bid');
         
         uint256 balance = bids[listingId][msg.sender];
         // uint256 balance = bidders[listingId][msg.sender].commitmentPrice + bidders[listingId][msg.sender].biddingPrice;
