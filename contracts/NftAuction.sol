@@ -114,7 +114,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
    
         console.log("bids",bids[listingId][msg.sender]);
         console.log("listing.price",listing.price);
-
+       bids[listingId][payable(msg.sender)] = msg.value;
         uint256 incentive = listing.price / minAuctionIncrement;
         listing.price = listing.price + incentive;
         
