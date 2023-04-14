@@ -174,7 +174,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     }
 
     function withdrawBid(uint256 listingId) public payable nonReentrant {
-        require(isAuctionExpired(listingId), 'auction must be ended');
+        require(isAuctionExpired(listingId), 'auction has to end to make a withdraw');
         require(highestBidder[listingId] != msg.sender, 'highest bidder cannot withdraw bid');
         require(!isReavelTimeOpen(listingId), 'Not yet, wait until the revealing time ended.');
         uint256 balance = bids[listingId][msg.sender];
