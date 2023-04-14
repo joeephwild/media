@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
 import '@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol';
@@ -14,7 +14,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     uint8 public constant STATUS_DONE = 2;
 
     uint256 public minAuctionIncrement = 10; // 10 percent
-    uint256 public commitmentPrice = 200 wei;
+   // uint256 public commitmentPrice = 200 wei;
 
     struct Listing {
         address seller;
@@ -34,24 +34,48 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => mapping(address => uint256)) public bids;
-    mapping(uint256 => address) public highestBidder;
-     
+    // mapping(uint256 => address) public highestBidder;
+    address public highestBidder;
+	uint    public highestBid;
+    uint private bidCount = 0;
+    uint private revealedCount = 0;
+
     constructor() ERC721("piggyNFT", "PNFT") {
         tokenCounter = 0;
         listingCounter = 0;
     }
-
-    struct Bidders {
-        uint biddingPrice;
-        uint commitmentPrice;
+    struct Bid {
+        bytes32 sealedBid;
+        uint depositAmt;
+        // uint biddingPrice;
+        // uint commitmentPrice;
         bool exists;
     }
 
-    //mapping(address => Bidder) public bidders;
-    mapping(uint256 => mapping(address => Bidders)) public bidders;
+    // mapping (address => Bid[]) public bidMap;
+    mapping (uint256 => mapping(address => Bid[])) public bidMap;
+    // EVENTS 
+    event AuctionEnded(address winner, uint highestBid);
 
-    function isBidder(uint listingId, address bidder) public view returns(bool isIndeed) {
-        return bidders[listingId][bidder].exists;
+    // struct Bidders {
+    //     uint biddingPrice;
+    //     uint commitmentPrice;
+    //     bool exists;
+    // }
+
+    // //mapping(address => Bidder) public bidders;
+    // mapping(uint256 => mapping(address => Bidders)) public bidders;
+
+        // MODIFIERS
+    modifier onlyBefore(uint _time) { require(block.timestamp < _time, "Too Late"); _; }
+    modifier onlyAfter(uint _time) { require(block.timestamp > _time, "Too Early"); _; }
+    
+
+    function isBidder(uint listingId, address bidder, uint _id) public view returns(bool isIndeed) {
+        // bidMap[listingId][bidder];
+        bool val = bidMap[listingId][bidder][_id].exists;
+        console.log("Boyfrined" ,val);
+        return val;
     }
 
 
@@ -92,49 +116,76 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         return listingId;
     }
 
-    function bid(uint256 listingId) public payable nonReentrant {
+    function sealBid(uint _value, string calldata _passcode) public view returns (bytes32) {
+        return keccak256(abi.encodePacked(_value,  _passcode, msg.sender));
+    }
+
+
+    function bid(uint256 listingId, bytes32 _sealedBid) public payable nonReentrant {
         require(isAuctionOpen(listingId), 'auction has ended');
         Listing storage listing = listings[listingId];
-        require(msg.sender != listing.seller, "Cannot bid on what you own");
-        require(!isBidder(listingId, msg.sender), "You can not bid twice in the same auction");
-        //require(msg.sender != highestBidder[listingId], "you can not bid twice");
-        console.log("bids",bids[listingId][msg.sender]);
+        require(msg.sender != listing.seller, "Cannot bid on what you own");        
+        //require(!isBidder(listingId, msg.sender), "You can not bid twice in the same auction");
         uint256 newBid = bids[listingId][msg.sender] + msg.value;
-        require(newBid >= listing.price + commitmentPrice, "Cannot bid below the latest bidding price and the commitment price");
-        require(newBid >= bids[listingId][highestBidder[listingId]], "Cannot bid below the latest highest bidding price");
+        require(newBid >= listing.price, "Cannot bid below the latest bidding price");
+        require(msg.value > 0,"You can't bid nothing");
+   
         console.log("bids",bids[listingId][msg.sender]);
         console.log("listing.price",listing.price);
 
-        bids[listingId][msg.sender] += msg.value;
-        bidders[listingId][msg.sender].exists = true;
-        bidders[listingId][msg.sender].commitmentPrice = commitmentPrice;
-        bidders[listingId][msg.sender].biddingPrice += msg.value ;
-
-        highestBidder[listingId] = msg.sender;
-        console.log("minAuctionIncrement",minAuctionIncrement);
+        // bids[listingId][msg.sender] += msg.value;
+        // highestBidder[listingId] = msg.sender;
         uint256 incentive = listing.price / minAuctionIncrement;
         listing.price = listing.price + incentive;
-        console.log("new listing.price",listing.price);
+        
+        bidMap[listingId][msg.sender].push(Bid({                               
+            sealedBid: _sealedBid,                   
+            depositAmt: msg.value,  
+            exists: true                 
+        }));
+         bidCount +=1;
         emit BidCreated(listingId, msg.sender, newBid);
     }
 
-    // function highestBidder(uint256 listingId, address _address) public returns(address winner){
-    //     Bidders[] memory rec = new Bidders[listingId][](ipCount);
-        // function AllIps() public view returns (IParameter[] memory){
-        // IParameter[] memory rec = new IParameter[](ipCount);
-        // for (uint i = 0; i < ipCount; i++) {
-        //     rec[i] =  bidders[i];
-        // }
-        // return rec;
-    // }
-    // }
+    function reveal(uint256 listingId, uint _value, string memory _passcode) external {
+        Bid storage myBid = bidMap[listingId][msg.sender][0];  
+        uint value = _value;
+        string memory passcode = _passcode;
+        require(myBid.sealedBid == keccak256(abi.encodePacked(value, passcode, msg.sender)),"The sealedBid doesn't match the hash");
+        /// @notice .encode -> .encodePacked
+        if(myBid.depositAmt == value){
+            //if this is a valid bid
+			myBid.sealedBid = bytes32(0);
+			if(!checkBid(listingId,msg.sender, value)) { 
+                payable(msg.sender).transfer(myBid.depositAmt); 
+            }
+        }      
+        revealedCount +=1; 
+    } 
 
+    function checkBid(uint256 listingId, address _bidder, uint _value) internal returns(bool success) {      
+        uint value = _value;
+        address bidder = _bidder;
+       // console.log("buisness exp", highestBid);
+        if (value < highestBid){
+            bids[listingId][payable(msg.sender)] = value;
+            return false;       //not a higher bid
+        }
+
+        if (highestBidder != address(0)) {                  
+           bids[listingId][highestBidder] += highestBid; 
+           //console.log("kourtorepally only fresh seeyou tonight guys");
+        }
+        highestBid = value;                                 
+        highestBidder = bidder;
+        return true;                   //a higher bid
+    }
 
     function completeAuction(uint256 listingId) public payable nonReentrant {
         require(!isAuctionOpen(listingId), 'auction is still open');
 
         Listing storage listing = listings[listingId];
-        address winner = highestBidder[listingId]; 
+        address winner = highestBidder; 
         require(
             msg.sender == listing.seller || msg.sender == winner, 
             'only seller or winner can complete auction'
@@ -159,19 +210,24 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     function withdrawBid(uint256 listingId) public payable nonReentrant {
         require(isAuctionExpired(listingId), 'auction must be ended');
-        require(highestBidder[listingId] != msg.sender, 'highest bidder cannot withdraw bid');
-
+        require(highestBidder != msg.sender, 'highest bidder cannot withdraw bid');
+        
         uint256 balance = bids[listingId][msg.sender];
         // uint256 balance = bidders[listingId][msg.sender].commitmentPrice + bidders[listingId][msg.sender].biddingPrice;
-        console.log("balance", balance);
-        //bids[listingId][msg.sender] = 0;
-        _transferFund(payable(msg.sender), balance);
-
+        if(balance != 0){
+             console.log("balance", balance);
+            _transferFund(payable(msg.sender), balance);
+            bids[listingId][msg.sender] = 0;
+        }
+        else {
+            console.log("Money already withdrawn.");
+        }
+        //bids[listingId][msg.sender] = 0;  
         emit WithdrawBid(listingId, msg.sender, balance);
-
     }
 
     function isAuctionOpen(uint256 id) public view returns (bool) {
+        
         return
             listings[id].status == STATUS_OPEN &&
             listings[id].endAt > block.timestamp;
