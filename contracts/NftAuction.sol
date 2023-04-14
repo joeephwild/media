@@ -147,7 +147,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         uint value = _value;
         address bidder = _bidder;
        // console.log("buisness exp", highestBid);
-        if (value < highestBid[listingId]){
+        if (value <= highestBid[listingId]){
             bids[listingId][payable(msg.sender)] = value;
             return false;       //not a higher bid
         }
@@ -192,9 +192,8 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     function withdrawBid(uint256 listingId) public payable nonReentrant {
         require(isAuctionExpired(listingId), 'auction must be ended');
         require(highestBidder[listingId] != msg.sender, 'highest bidder cannot withdraw bid');
-        
+        require(!isReavelTimeOpen(listingId), 'Not yet, wait until the revealing time ended.');
         uint256 balance = bids[listingId][msg.sender];
-        // uint256 balance = bidders[listingId][msg.sender].commitmentPrice + bidders[listingId][msg.sender].biddingPrice;
         console.log("balance", balance);
         if(balance != 0){
              console.log("balance", balance);
