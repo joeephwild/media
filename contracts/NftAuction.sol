@@ -9,12 +9,9 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     uint256 public tokenCounter;
     uint256 public listingCounter;
-
     uint8 public constant STATUS_OPEN = 1;
     uint8 public constant STATUS_DONE = 2;
-
     uint256 public minAuctionIncrement = 10; // 10 percent
-   // uint256 public commitmentPrice = 200 wei;
 
     struct Listing {
         address seller;
@@ -32,6 +29,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     event BidCreated(uint256 listingId, address indexed bidder, uint256 bid);
     event AuctionCompleted(uint256 listingId, address indexed seller, address indexed bidder, uint256 bid);
     event WithdrawBid(uint256 listingId, address indexed bidder, uint256 bid);
+    event AuctionEnded(address winner, uint highestBid);
 
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => mapping(address => uint256)) public bids;
@@ -52,16 +50,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     }
 
     mapping (uint256 => mapping(address => Bid[])) public bidMap;
-    // EVENTS 
-    event AuctionEnded(address winner, uint highestBid);
-
-    // function isBidder(uint listingId, address bidder, uint _id) public view returns(bool isIndeed) {
-    //     // bidMap[listingId][bidder];
-    //     bool val = bidMap[listingId][bidder][_id].exists;
-    //     console.log("Boyfrined" ,val);
-    //     return val;
-    // }
-
+    
     function mint(string memory tokenURI, address minterAddress) public returns (uint256) {
         tokenCounter++;
         uint256 tokenId = tokenCounter;
@@ -106,14 +95,12 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         require(isAuctionOpen(listingId), 'auction has ended');
         Listing storage listing = listings[listingId];
         require(msg.sender != listing.seller, "Cannot bid on what you own");        
-        //require(!isBidder(listingId, msg.sender, _id), "You can not bid twice in the same auction");
         require(bidMap[listingId][msg.sender].length < 1,"There can only be one bid per account");
         uint256 newBid = bids[listingId][msg.sender] + msg.value;
         require(newBid >= listing.price, "Cannot bid below the latest bidding price");
         require(msg.value > 0,"You can't bid nothing");
-   
-        console.log("bids",bids[listingId][msg.sender]);
-        console.log("listing.price",listing.price);
+        // console.log("bids",bids[listingId][msg.sender]);
+        // console.log("listing.price",listing.price);
        bids[listingId][payable(msg.sender)] = msg.value;
         uint256 incentive = listing.price / minAuctionIncrement;
         listing.price = listing.price + incentive;
@@ -146,7 +133,6 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     function checkBid(uint256 listingId, address _bidder, uint _value) internal returns(bool success) {      
         uint value = _value;
         address bidder = _bidder;
-       // console.log("buisness exp", highestBid);
         if (value <= highestBid[listingId]){
             bids[listingId][payable(msg.sender)] = value;
             return false;       //not a higher bid
@@ -154,12 +140,10 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
         if (highestBidder[listingId] != address(0)) {                  
            bids[listingId][highestBidder[listingId]] += highestBid[listingId]; 
-           //console.log("kourtorepally only fresh seeyou tonight guys");
         }
-        //bids[listingId][msg.sender] = value; 
         highestBid[listingId] = value;                                
         highestBidder[listingId] = bidder;
-        return true;                   //a higher bid
+        return true;            //a higher bid
     }
 
     function completeAuction(uint256 listingId) public payable nonReentrant {
@@ -203,7 +187,6 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         else {
             console.log("Money already withdrawn.");
         }
-        //bids[listingId][msg.sender] = 0;  
         emit WithdrawBid(listingId, msg.sender, balance);
     }
 
@@ -214,11 +197,9 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
             listings[id].endAt > block.timestamp;
     }
 
-
     function isAuctionExpired(uint256 id) public view returns (bool) {
         return listings[id].endAt <= block.timestamp;
     }
-
 
     function isReavelTimeOpen(uint256 id) public view returns (bool) {
         
@@ -226,7 +207,6 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
             listings[id].status == STATUS_OPEN &&
             listings[id].revealEndtime > block.timestamp;
     }
-
 
     function _transferFund(address payable to, uint256 amount) internal {
         if (amount == 0) {
