@@ -23,6 +23,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         uint256 netPrice; // actual price
         uint256 startAt;
         uint256 endAt; 
+        uint256 revealEndtime;
         uint8 status;
     }
 
@@ -36,8 +37,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     mapping(uint256 => mapping(address => uint256)) public bids;
     mapping(uint256 => address) public highestBidder;
     mapping(uint256 => uint256) public highestBid;
-    // address public highestBidder;
-	// uint    public highestBid;
+
     uint private bidCount = 0;
     uint private revealedCount = 0;
 
@@ -48,38 +48,19 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     struct Bid {
         bytes32 sealedBid;
         uint depositAmt;
-        // uint biddingPrice;
-        // uint commitmentPrice;
         bool exists;
     }
 
-    // mapping (address => Bid[]) public bidMap;
     mapping (uint256 => mapping(address => Bid[])) public bidMap;
     // EVENTS 
     event AuctionEnded(address winner, uint highestBid);
 
-    // struct Bidders {
-    //     uint biddingPrice;
-    //     uint commitmentPrice;
-    //     bool exists;
+    // function isBidder(uint listingId, address bidder, uint _id) public view returns(bool isIndeed) {
+    //     // bidMap[listingId][bidder];
+    //     bool val = bidMap[listingId][bidder][_id].exists;
+    //     console.log("Boyfrined" ,val);
+    //     return val;
     // }
-
-    // //mapping(address => Bidder) public bidders;
-    // mapping(uint256 => mapping(address => Bidders)) public bidders;
-
-        // MODIFIERS
-    modifier onlyBefore(uint _time) { require(block.timestamp < _time, "Too Late"); _; }
-    modifier onlyAfter(uint _time) { require(block.timestamp > _time, "Too Early"); _; }
-    
-
-    function isBidder(uint listingId, address bidder, uint _id) public view returns(bool isIndeed) {
-        // bidMap[listingId][bidder];
-        bool val = bidMap[listingId][bidder][_id].exists;
-        console.log("Boyfrined" ,val);
-        return val;
-    }
-
-
 
     function mint(string memory tokenURI, address minterAddress) public returns (uint256) {
         tokenCounter++;
@@ -89,16 +70,15 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         _setTokenURI(tokenId, tokenURI);
 
         emit Minted(minterAddress, tokenId, tokenURI);
-
         return tokenId;
     }
 
-    function createAuctionListing (uint256 price, uint256 tokenId, uint256 durationInSeconds) public returns (uint256) {
+    function createAuctionListing (uint256 price, uint256 tokenId, uint256 durationInSeconds, uint256 revealInSeconds) public returns (uint256) {
         listingCounter++;
         uint256 listingId = listingCounter;
-
         uint256 startAt = block.timestamp;
         uint256 endAt = startAt + durationInSeconds;
+        uint256 revealEndtime = endAt + revealInSeconds;
 
         listings[listingId] = Listing({
             seller: msg.sender,
@@ -107,7 +87,8 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
             netPrice: price,
             status: STATUS_OPEN,
             startAt: startAt,
-            endAt: endAt
+            endAt: endAt,
+            revealEndtime: revealEndtime
         });
 
         _transfer(msg.sender, address(this), tokenId);
@@ -121,12 +102,12 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         return keccak256(abi.encodePacked(_value,  _passcode, msg.sender));
     }
 
-
     function bid(uint256 listingId, bytes32 _sealedBid) public payable nonReentrant {
         require(isAuctionOpen(listingId), 'auction has ended');
         Listing storage listing = listings[listingId];
         require(msg.sender != listing.seller, "Cannot bid on what you own");        
-        //require(!isBidder(listingId, msg.sender), "You can not bid twice in the same auction");
+        //require(!isBidder(listingId, msg.sender, _id), "You can not bid twice in the same auction");
+        require(bidMap[listingId][msg.sender].length < 1,"There can only be one bid per account");
         uint256 newBid = bids[listingId][msg.sender] + msg.value;
         require(newBid >= listing.price, "Cannot bid below the latest bidding price");
         require(msg.value > 0,"You can't bid nothing");
@@ -147,6 +128,8 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
     }
 
     function reveal(uint256 listingId, uint _value, string memory _passcode) external {
+        require(isAuctionExpired(listingId), 'Wait until the auction ended');
+        require(isReavelTimeOpen(listingId), 'You missed it,you no longer participating you can withdraw your money.');
         Bid storage myBid = bidMap[listingId][msg.sender][0];  
         uint value = _value;
         string memory passcode = _passcode;
@@ -212,6 +195,7 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
         
         uint256 balance = bids[listingId][msg.sender];
         // uint256 balance = bidders[listingId][msg.sender].commitmentPrice + bidders[listingId][msg.sender].biddingPrice;
+        console.log("balance", balance);
         if(balance != 0){
              console.log("balance", balance);
             _transferFund(payable(msg.sender), balance);
@@ -234,6 +218,14 @@ contract NFTAuction is ERC721URIStorage, ReentrancyGuard {
 
     function isAuctionExpired(uint256 id) public view returns (bool) {
         return listings[id].endAt <= block.timestamp;
+    }
+
+
+    function isReavelTimeOpen(uint256 id) public view returns (bool) {
+        
+        return
+            listings[id].status == STATUS_OPEN &&
+            listings[id].revealEndtime > block.timestamp;
     }
 
 
