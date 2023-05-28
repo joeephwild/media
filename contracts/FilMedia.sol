@@ -8,17 +8,17 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract MusicNFT is ERC721URIStorage {
+contract MusicNFT is ERC721URIStorage , Ownable  {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds; 
     uint256 public tokenCounter;
-    address payable public owner;
+    address payable public contractowner;
     address public artist;
     uint256 public royaltyFee;
 
     struct MusicItem {
         uint256 tokenId;
-        address payable owner;
+        address payable contractowner;
         address payable seller;
         uint256 price;
         bool currentlyListed;
@@ -42,7 +42,7 @@ contract MusicNFT is ERC721URIStorage {
     //the event emitted when a token is successfully listed
     event Minted (
         uint256 indexed tokenId,
-        address owner,
+        address contractowner,
         address seller,
         uint256 price,
         bool currentlyListed
@@ -54,15 +54,11 @@ contract MusicNFT is ERC721URIStorage {
 
     constructor() ERC721("musicNFT", "MNFTART") {
         tokenCounter = 0;
-        //listingCounter = 0;
-        owner = payable(msg.sender);
-        // console.log(address(this));
-        console.log(owner.balance);
+        contractowner = payable(msg.sender);
     }
 
-
     // setup royality fee that is going to be paid to artist the creator
-    function setupRoyaltyFee(uint256 _royaltyFee) external {
+    function setupRoyaltyFee(uint256 _royaltyFee) external onlyOwner  {
         royaltyFee = _royaltyFee; // 0.04 percent
     }
 
@@ -71,10 +67,7 @@ contract MusicNFT is ERC721URIStorage {
         uint256 _price,
         string memory tokenURI) 
         public returns (uint256) {        
-        // require(
-        //     _price + royaltyFedd<= msg.value,
-        //     "Deployer must pay royalty fee for each token listed on the marketplace"
-        // );        
+       
         tokenCounter++;
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
@@ -89,13 +82,7 @@ contract MusicNFT is ERC721URIStorage {
             _price,
             true
         );
-        // musicItems.push(
-        //     MusicItem(
-        //     newTokenId, 
-        //     payable(address(this)),
-        //     payable(msg.sender), 
-        //     _price, 
-        //     true));
+
         emit Minted(
             newTokenId,
             payable(address(this)),
@@ -107,7 +94,7 @@ contract MusicNFT is ERC721URIStorage {
     }
 
     /* Updates the royalty fee of the contract */
-    function updateRoyaltyFee(uint256 _royaltyFee) external {
+    function updateRoyaltyFee(uint256 _royaltyFee) external onlyOwner {
         royaltyFee = _royaltyFee;
     }
 
@@ -116,24 +103,24 @@ contract MusicNFT is ERC721URIStorage {
     function buyToken(uint256 _tokenId) external payable {
         uint256 price = musicItems[_tokenId].price;
         address seller = musicItems[_tokenId].seller;
+        console.log("first",contractowner.balance);
         require(
             msg.value == price,
             "Please send the asking price in order to complete the purchase"
         );
         musicItems[_tokenId].seller = payable(address(0));
-        //_transfer(seller, msg.sender, _tokenId);
-
+      
         //Actually transfer the token to the new owner
         _transfer(address(this), msg.sender, _tokenId);
         //approve the marketplace to sell NFTs on your behalf
         approve(address(this), _tokenId);
 
-        royaltyFee = royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract owners
-        payable(owner).transfer(royaltyFee);
+        royaltyFee = royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract contractowners
+        payable(contractowner).transfer(royaltyFee);
         payable(seller).transfer(msg.value-royaltyFee);
-        
+        console.log("second", contractowner.balance);
         emit MarketItemBought(_tokenId, seller, msg.sender, price);
-        console.log(owner.balance);
+        console.log(contractowner.balance);
     }
 
     /* Allows someone to resell their music nft */
@@ -167,7 +154,7 @@ contract MusicNFT is ERC721URIStorage {
         return tokens;
     }
     
-    //Returns all the NFTs that the current user is owner or seller in
+    //Returns all the NFTs that the current user is contractowner or seller in
     function getMyNFTs() public view returns (MusicItem[] memory) {
         uint totalItemCount = _tokenIds.current();
         uint itemCount = 0;
@@ -176,7 +163,7 @@ contract MusicNFT is ERC721URIStorage {
         //Important to get a count of all the NFTs that belong to the user before we can make an array for them
         for(uint i=0; i < totalItemCount; i++)
         {
-            if(musicItems[i+1].owner == msg.sender || musicItems[i+1].seller == msg.sender){
+            if(musicItems[i+1].contractowner == msg.sender || musicItems[i+1].seller == msg.sender){
                 itemCount += 1;
             }
         }
@@ -184,7 +171,7 @@ contract MusicNFT is ERC721URIStorage {
         //Once you have the count of relevant NFTs, create an array then store all the NFTs in it
         MusicItem[] memory items = new MusicItem[](itemCount);
         for(uint i=0; i < totalItemCount; i++) {
-            if(musicItems[i+1].owner == msg.sender || musicItems[i+1].seller == msg.sender) {
+            if(musicItems[i+1].contractowner == msg.sender || musicItems[i+1].seller == msg.sender) {
                 currentId = i+1;
                 MusicItem storage currentItem = musicItems[currentId];
                 items[currentIndex] = currentItem;
@@ -194,38 +181,4 @@ contract MusicNFT is ERC721URIStorage {
         return items;
     }
 
-    
-
-    /* Fetches all the tokens currently listed for sale */
-    // function getAllUnsoldTokens() external view returns (MusicItem[] memory) {
-    //     uint256 unsoldCount = balanceOf(address(this));
-    //     MusicItem[] memory tokens = new MusicItem[](unsoldCount);
-    //     uint256 currentIndex;
-    //     for (uint256 i = 0; i < musicItems.length; i++) {
-    //         if (musicItems[i].seller != address(0)) {
-    //             tokens[currentIndex] = musicItems[i];
-    //             currentIndex++;
-    //         }
-    //     }
-    //     return (tokens);
-    // }
-
-    /* Fetches all the tokens owned by the user */
-    // function getMyTokens() external view returns (MusicItem[] memory) {
-    //     uint256 myTokenCount = balanceOf(msg.sender);
-    //     MusicItem[] memory tokens = new MusicItem[](myTokenCount);
-    //     uint256 currentIndex;
-    //     for (uint256 i = 0; i < musicItems.length; i++) {
-    //         if (ownerOf(i) == msg.sender) {
-    //             tokens[currentIndex] = musicItems[i];
-    //             currentIndex++;
-    //         }
-    //     }
-    //     return (tokens);
-    // }
-
-    /* Internal function that gets the baseURI initialized in the constructor */
-    // function _baseURI() internal view virtual override returns (string memory) {
-    //     return baseURI;
-    // }
 }
