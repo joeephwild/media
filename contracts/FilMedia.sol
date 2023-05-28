@@ -128,7 +128,7 @@ contract MusicNFT is ERC721URIStorage {
         //approve the marketplace to sell NFTs on your behalf
         approve(address(this), _tokenId);
 
-        //royaltyFee = price - royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract owners
+        royaltyFee = royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract owners
         payable(owner).transfer(royaltyFee);
         payable(seller).transfer(msg.value-royaltyFee);
         
