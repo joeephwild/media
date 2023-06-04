@@ -1,10 +1,14 @@
 //SPDX-License-Identifier: UNLINCENSED
 pragma solidity ^0.8.9;
 
-contract SubscriptionContract {
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "hardhat/console.sol";
+
+contract SubscriptionContract is Ownable {
   uint public nextPlanId;
   struct Plan {
     address artist;
+    string name;
     uint amount;
     uint frequency;
   }
@@ -12,24 +16,29 @@ contract SubscriptionContract {
     address subscriber;
     uint start;
     uint nextPayment;
+    bool isSubscribed;
   }
   mapping(uint => Plan) public plans;
   mapping(address => mapping(uint => Subscription)) public subscriptions;
+  mapping(address => Subscription) public subscribers;
 
   event PlanCreated(
     address artist,
+    string name,
     uint planId,
     uint date
   );
   event SubscriptionCreated(
     address subscriber,
     uint planId,
-    uint date
+    uint date,
+    bool isSubscribed
   );
   event SubscriptionCancelled(
     address subscriber,
     uint planId,
-    uint date
+    uint date,
+    bool isSubscribed
   );
   event PaymentSent(
     address from,
@@ -39,12 +48,13 @@ contract SubscriptionContract {
     uint date
   );
 
-  function createPlan( uint amount) external {
+  function createPlan( string memory _name, uint amount) external onlyOwner{
     require(amount > 0, "amount needs to be > 0");
       plans[nextPlanId] = Plan(
       msg.sender, 
+      _name,
       amount, 
-     30 days
+      30 days
     );
     nextPlanId++;
   }
@@ -64,9 +74,17 @@ contract SubscriptionContract {
     subscriptions[msg.sender][planId] = Subscription(
       msg.sender, 
       block.timestamp, 
-      block.timestamp + plan.frequency
+      block.timestamp + plan.frequency,
+      true
     );
-    emit SubscriptionCreated(msg.sender, planId, block.timestamp);
+
+    subscribers[msg.sender] = Subscription(
+      msg.sender, 
+      block.timestamp, 
+      block.timestamp + plan.frequency,
+      true
+    );
+    emit SubscriptionCreated(msg.sender, planId, block.timestamp, true);
   }
 
   function cancel(uint planId) external {
@@ -76,7 +94,7 @@ contract SubscriptionContract {
       "subscriptionplan does not exist"
     );
     delete subscriptions[msg.sender][planId]; 
-    emit SubscriptionCancelled(msg.sender, planId, block.timestamp);
+    emit SubscriptionCancelled(msg.sender, planId, block.timestamp, false);
   }
 
   function pay(address subscriber, uint planId) external payable {
@@ -84,7 +102,7 @@ contract SubscriptionContract {
     Plan storage plan = plans[planId];
     require(
       subscriptionplan.subscriber != address(0), 
-      "subscriptionplan does not exist"
+      "subscription plan does not exist or you have not yet subscribed"
     );
     require(
       block.timestamp > subscriptionplan.nextPayment,
@@ -99,5 +117,16 @@ contract SubscriptionContract {
       block.timestamp
     );
     subscriptionplan.nextPayment = subscriptionplan.nextPayment + plan.frequency;
+  }
+
+  function isSubscriber(address _address) public view returns(bool){
+      require(subscribers[_address].subscriber != address(0), "You need to subscribe first");
+      require(
+        block.timestamp < subscribers[_address].nextPayment,
+        "You need to renew your subscription to continue"
+      );
+      console.log("envy",subscribers[_address].isSubscribed);
+      console.log("bramy",subscribers[_address].subscriber);
+      return subscribers[_address].isSubscribed;
   }
 }
