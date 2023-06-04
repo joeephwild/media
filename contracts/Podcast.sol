@@ -12,7 +12,7 @@ interface SubscriptionContract {
    function isSubscriber(address _address) external view returns(bool);
 }
 
-contract MusicNFT is ERC721URIStorage , Ownable  {
+contract Podcast is ERC721URIStorage , Ownable  {
     address subscriptioncontract = 0x93f8dddd876c7dBE3323723500e83E202A7C96CC;
     
     using Counters for Counters.Counter;
@@ -22,16 +22,16 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
     address public artist;
     uint256 public royaltyFee;
 
-    struct MusicItem {
+    struct PodcastItem {
         uint256 tokenId;
         address payable contractowner;
         address payable seller;
         uint256 price;
         bool currentlyListed;
     }
-    //MusicItem[] public musicItems;
+    //PodcastItem[] public PodcastItems;
     //This mapping maps tokenId to token info and is helpful when retrieving details about a tokenId
-    mapping(uint256 => MusicItem) private musicItems;
+    mapping(uint256 => PodcastItem) private PodcastItems;
 
     event MarketItemBought(
         uint256 indexed tokenId,
@@ -58,7 +58,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
 
     //event Minted(address indexed minter, uint256 nftID, string uri);
 
-    constructor() ERC721("musicNFT", "MNFTART") {
+    constructor() ERC721("PodcastNFT", "MNFTART") {
         tokenCounter = 0;
         contractowner = payable(msg.sender);
     }
@@ -68,8 +68,8 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         royaltyFee = _royaltyFee; // 0.04 percent
     }
 
-    // Mint music as creator
-    function mintMusic(
+    // Mint Podcast as creator
+    function mintPodcast(
         uint256 _price,
         string memory tokenURI) 
         public returns (uint256) { 
@@ -85,7 +85,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         _setTokenURI(newTokenId, tokenURI);
         
         _transfer(msg.sender, address(this), newTokenId);
-        musicItems[newTokenId] = MusicItem(
+        PodcastItems[newTokenId] = PodcastItem(
             newTokenId, 
             payable(address(this)),
             payable(msg.sender), 
@@ -107,16 +107,16 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         royaltyFee = _royaltyFee;
     }
 
-    /* Creates the sale of a music nft listed on the marketplace */
+    /* Creates the sale of a Podcast nft listed on the marketplace */
     /* Transfers ownership of the nft, as well as funds between parties */
-    function buyMusicToken(uint256 _tokenId) external payable {
-        uint256 price = musicItems[_tokenId].price;
-        address seller = musicItems[_tokenId].seller;
+    function buyPodcastToken(uint256 _tokenId) external payable {
+        uint256 price = PodcastItems[_tokenId].price;
+        address seller = PodcastItems[_tokenId].seller;
         require(
             msg.value == price,
             "Please send the asking price in order to complete the purchase"
         );
-        musicItems[_tokenId].seller = payable(address(0));
+        PodcastItems[_tokenId].seller = payable(address(0));
         //_transfer(seller, msg.sender, _tokenId);
 
         //Actually transfer the token to the new owner
@@ -131,13 +131,13 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         emit MarketItemBought(_tokenId, seller, msg.sender, price);
     }
 
-    /* Allows someone to resell their music nft */
-    function resellMusicToken(uint256 _tokenId, uint256 _price) external payable {
+    /* Allows someone to resell their Podcast nft */
+    function resellPodcastToken(uint256 _tokenId, uint256 _price) external payable {
         //require(msg.value == royaltyFee, "Must pay royalty");
         require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");
         require(_price > 0, "Price must be greater than zero");
-        musicItems[_tokenId].price = _price;
-        musicItems[_tokenId].seller = payable(msg.sender);
+        PodcastItems[_tokenId].price = _price;
+        PodcastItems[_tokenId].seller = payable(msg.sender);
         
         _transfer(msg.sender, address(this), _tokenId);
         emit MarketItemRelisted(_tokenId, msg.sender, _price);
@@ -145,9 +145,9 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
 
     
     //This will return all the NFTs currently listed to be sold on the marketplace
-    function getAllNFTs() public view returns (MusicItem[] memory) {
+    function getAllNFTs() public view returns (PodcastItem[] memory) {
         uint nftCount = _tokenIds.current();
-        MusicItem[] memory tokens = new MusicItem[](nftCount);
+        PodcastItem[] memory tokens = new PodcastItem[](nftCount);
         uint currentIndex = 0;
         uint currentId;
         //at the moment currentlyListed is true for all, if it becomes false in the future we will 
@@ -155,7 +155,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         for(uint i=0;i<nftCount;i++)
         {
             currentId = i + 1;
-            MusicItem storage currentItem = musicItems[currentId];
+            PodcastItem storage currentItem = PodcastItems[currentId];
             tokens[currentIndex] = currentItem;
             currentIndex += 1;
         }
@@ -164,7 +164,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
     }
     
     //Returns all the NFTs that the current user is contractowner or seller in
-    function getMyNFTs() public view returns (MusicItem[] memory) {
+    function getMyNFTs() public view returns (PodcastItem[] memory) {
         uint totalItemCount = _tokenIds.current();
         uint itemCount = 0;
         uint currentIndex = 0;
@@ -172,17 +172,17 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         //Important to get a count of all the NFTs that belong to the user before we can make an array for them
         for(uint i=0; i < totalItemCount; i++)
         {
-            if(musicItems[i+1].contractowner == msg.sender || musicItems[i+1].seller == msg.sender){
+            if(PodcastItems[i+1].contractowner == msg.sender || PodcastItems[i+1].seller == msg.sender){
                 itemCount += 1;
             }
         }
 
         //Once you have the count of relevant NFTs, create an array then store all the NFTs in it
-        MusicItem[] memory items = new MusicItem[](itemCount);
+        PodcastItem[] memory items = new PodcastItem[](itemCount);
         for(uint i=0; i < totalItemCount; i++) {
-            if(musicItems[i+1].contractowner == msg.sender || musicItems[i+1].seller == msg.sender) {
+            if(PodcastItems[i+1].contractowner == msg.sender || PodcastItems[i+1].seller == msg.sender) {
                 currentId = i+1;
-                MusicItem storage currentItem = musicItems[currentId];
+                PodcastItem storage currentItem = PodcastItems[currentId];
                 items[currentIndex] = currentItem;
                 currentIndex += 1;
             }
