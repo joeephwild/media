@@ -8,7 +8,13 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
+interface SubscriptionContract {
+   function isSubscriber(address _address) external view returns(bool);
+}
+
 contract MusicNFT is ERC721URIStorage , Ownable  {
+    address subscriptioncontract = 0x93f8dddd876c7dBE3323723500e83E202A7C96CC;
+    
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds; 
     uint256 public tokenCounter;
@@ -66,8 +72,12 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
     function mintMusic(
         uint256 _price,
         string memory tokenURI) 
-        public returns (uint256) {        
-       
+        public returns (uint256) { 
+        require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");        
+        // require(
+        //     _price + royaltyFedd<= msg.value,
+        //     "Deployer must pay royalty fee for each token listed on the marketplace"
+        // );        
         tokenCounter++;
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
@@ -89,7 +99,6 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
             payable(msg.sender), 
             _price,
             true);
-        // tokenaddress[msg.sender].push(newTokenId);
         return newTokenId;
     }
 
@@ -100,32 +109,32 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
 
     /* Creates the sale of a music nft listed on the marketplace */
     /* Transfers ownership of the nft, as well as funds between parties */
-    function buyToken(uint256 _tokenId) external payable {
+    function buyMusicToken(uint256 _tokenId) external payable {
         uint256 price = musicItems[_tokenId].price;
         address seller = musicItems[_tokenId].seller;
-        console.log("first",contractowner.balance);
         require(
             msg.value == price,
             "Please send the asking price in order to complete the purchase"
         );
         musicItems[_tokenId].seller = payable(address(0));
-      
+        //_transfer(seller, msg.sender, _tokenId);
+
         //Actually transfer the token to the new owner
         _transfer(address(this), msg.sender, _tokenId);
         //approve the marketplace to sell NFTs on your behalf
         approve(address(this), _tokenId);
 
-        royaltyFee = royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract contractowners
+        //royaltyFee = price - royaltyFee * price; // 0.04 or 4% percent of the selling price goes to the contract contractowners
         payable(contractowner).transfer(royaltyFee);
         payable(seller).transfer(msg.value-royaltyFee);
-        console.log("second", contractowner.balance);
+
         emit MarketItemBought(_tokenId, seller, msg.sender, price);
-        console.log(contractowner.balance);
     }
 
     /* Allows someone to resell their music nft */
     function resellToken(uint256 _tokenId, uint256 _price) external payable {
         //require(msg.value == royaltyFee, "Must pay royalty");
+        require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");
         require(_price > 0, "Price must be greater than zero");
         musicItems[_tokenId].price = _price;
         musicItems[_tokenId].seller = payable(msg.sender);
