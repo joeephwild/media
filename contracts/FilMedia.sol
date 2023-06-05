@@ -32,7 +32,9 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
     //MusicItem[] public musicItems;
     //This mapping maps tokenId to token info and is helpful when retrieving details about a tokenId
     mapping(uint256 => MusicItem) private musicItems;
-
+    mapping(uint256 => address[]) public musicLikes;
+    mapping(uint256 => address[]) public artistFollow;
+    
     event MarketItemBought(
         uint256 indexed tokenId,
         address indexed seller,
@@ -188,6 +190,49 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
             }
         }
         return items;
+    }
+
+    // Follow Artist and Like Music
+
+    function likeMusic(uint256 tokenId) external {
+        require(_exists(tokenId), "Token doesn't exists.");
+        // exists      
+        musicLikes[tokenId].push(msg.sender);
+    }
+
+    function likeMusicCount(uint256 tokenId) external view  returns(uint256){
+        require(_exists(tokenId), "Token doesn't exists.");
+        return musicLikes[tokenId].length;
+    }
+
+    function unlikeMusic(uint256 tokenId) external {
+        require(_exists(tokenId), "Token doesn't exists.");
+        musicLikes[tokenId].push(msg.sender);
+        for (uint i=0; i < musicLikes[tokenId].length; i++) {
+            if (musicLikes[tokenId][i] == msg.sender ){
+                delete musicLikes[tokenId][i];                
+            }
+        }
+    }
+
+    function followArtist(uint256 tokenId) external {
+        require(_exists(tokenId), "Token doesn't exists.");
+        artistFollow[tokenId].push(msg.sender);
+    }
+
+    function followedArtistCount(uint256 tokenId) external view  returns(uint256){
+        require(_exists(tokenId), "Token doesn't exists.");
+        return artistFollow[tokenId].length;
+    }
+
+    function unfollowArtist(uint256 tokenId) external {
+        require(_exists(tokenId), "Token doesn't exists.");
+        artistFollow[tokenId].push(msg.sender);
+        for (uint i=0; i < artistFollow[tokenId].length; i++) {
+            if (artistFollow[tokenId][i] == msg.sender ){
+                delete artistFollow[tokenId][i];                
+            }
+        }
     }
 
 }
