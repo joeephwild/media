@@ -1,14 +1,13 @@
-//SPDX-License-Identifier: UNLINCENSED
-pragma solidity ^0.8.9;
+//SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.6;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "hardhat/console.sol";
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-contract SubscriptionContract is Ownable {
+contract SubscribeCrypto {
   uint public nextPlanId;
   struct Plan {
-    address artist;
-    string name;
+    address merchant;
+    address token;
     uint amount;
     uint frequency;
   }
@@ -16,29 +15,25 @@ contract SubscriptionContract is Ownable {
     address subscriber;
     uint start;
     uint nextPayment;
-    bool isSubscribed;
   }
   mapping(uint => Plan) public plans;
   mapping(address => mapping(uint => Subscription)) public subscriptions;
-  mapping(address => Subscription) public subscribers;
+  mapping(address => uint[]) public artistplans;
 
   event PlanCreated(
-    address artist,
-    string name,
+    address merchant,
     uint planId,
     uint date
   );
   event SubscriptionCreated(
     address subscriber,
     uint planId,
-    uint date,
-    bool isSubscribed
+    uint date
   );
   event SubscriptionCancelled(
     address subscriber,
     uint planId,
-    uint date,
-    bool isSubscribed
+    uint date
   );
   event PaymentSent(
     address from,
@@ -48,24 +43,30 @@ contract SubscriptionContract is Ownable {
     uint date
   );
 
-  function createPlan( string memory _name, uint amount) external onlyOwner{
-    require(amount > 0, "amount needs to be > 0");
-      plans[nextPlanId] = Plan(
+  function createPlan(address token, uint amount, uint frequency) external {
+    require(token != address(0), 'address cannot be null address');
+    require(amount > 0, 'amount needs to be > 0');
+    require(frequency > 0, 'frequency needs to be > 0');
+    plans[nextPlanId] = Plan(
       msg.sender, 
-      _name,
+      token,
       amount, 
-      30 days
+      frequency
     );
     nextPlanId++;
+
+    artistplans[msg.sender].push(nextPlanId);
   }
 
-  function subscribe(uint planId) external payable {
+  function subscribe(uint planId) external {
+    IERC20 token = IERC20(plans[planId].token);
     Plan storage plan = plans[planId];
-    require(plan.artist != address(0), "this plan does not exist");
-    payable(plan.artist).transfer(plan.amount);
+    require(plan.merchant != address(0), 'this plan does not exist');
+
+    token.transferFrom(msg.sender, plan.merchant, plan.amount);  
     emit PaymentSent(
       msg.sender, 
-      plan.artist, 
+      plan.merchant, 
       plan.amount, 
       planId, 
       block.timestamp
@@ -74,59 +75,49 @@ contract SubscriptionContract is Ownable {
     subscriptions[msg.sender][planId] = Subscription(
       msg.sender, 
       block.timestamp, 
-      block.timestamp + plan.frequency,
-      true
+      block.timestamp + plan.frequency
     );
-
-    subscribers[msg.sender] = Subscription(
-      msg.sender, 
-      block.timestamp, 
-      block.timestamp + plan.frequency,
-      true
-    );
-    emit SubscriptionCreated(msg.sender, planId, block.timestamp, true);
+    emit SubscriptionCreated(msg.sender, planId, block.timestamp);
   }
 
   function cancel(uint planId) external {
-    Subscription storage subscriptionplan = subscriptions[msg.sender][planId];
+    Subscription storage subscription = subscriptions[msg.sender][planId];
     require(
-      subscriptionplan.subscriber != address(0), 
-      "subscriptionplan does not exist"
+      subscription.subscriber != address(0), 
+      'this subscription does not exist'
     );
+    
     delete subscriptions[msg.sender][planId]; 
-    emit SubscriptionCancelled(msg.sender, planId, block.timestamp, false);
+    for (uint256 i = 0; i < artistplans[msg.sender].length; i++) {
+      if (artistplans[msg.sender][i] == planId) {
+        delete artistplans[msg.sender][i];
+      }
+    }
+    
+    emit SubscriptionCancelled(msg.sender, planId, block.timestamp);
   }
 
-  function pay(address subscriber, uint planId) external payable {
-    Subscription storage subscriptionplan = subscriptions[subscriber][planId];
+  function pay(address subscriber, uint planId) external {
+    Subscription storage subscription = subscriptions[subscriber][planId];
     Plan storage plan = plans[planId];
+    IERC20 token = IERC20(plan.token);
     require(
-      subscriptionplan.subscriber != address(0), 
-      "subscription plan does not exist or you have not yet subscribed"
+      subscription.subscriber != address(0), 
+      'this subscription does not exist'
     );
     require(
-      block.timestamp > subscriptionplan.nextPayment,
-      "not due yet"
+      block.timestamp > subscription.nextPayment,
+      'not due yet'
     );
-    payable(plan.artist).transfer(plan.amount);
+
+    token.transferFrom(subscriber, plan.merchant, plan.amount);  
     emit PaymentSent(
       subscriber,
-      plan.artist, 
+      plan.merchant, 
       plan.amount, 
       planId, 
       block.timestamp
     );
-    subscriptionplan.nextPayment = subscriptionplan.nextPayment + plan.frequency;
-  }
-
-  function isSubscriber(address _address) public view returns(bool){
-      require(subscribers[_address].subscriber != address(0), "You need to subscribe first");
-      require(
-        block.timestamp < subscribers[_address].nextPayment,
-        "You need to renew your subscription to continue"
-      );
-      console.log("envy",subscribers[_address].isSubscribed);
-      console.log("bramy",subscribers[_address].subscriber);
-      return subscribers[_address].isSubscribed;
+    subscription.nextPayment = subscription.nextPayment + plan.frequency;
   }
 }
