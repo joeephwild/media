@@ -8,12 +8,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-interface SubscriptionContract {
-   function isSubscriber(address _address) external view returns(bool);
-}
+// interface SubscriptionContract {
+//    function isSubscriber(address _address) external view returns(bool);
+// }
 
 contract MusicNFT is ERC721URIStorage , Ownable  {
-    address subscriptioncontract = 0x93f8dddd876c7dBE3323723500e83E202A7C96CC;
+   // address subscriptioncontract = 0x93f8dddd876c7dBE3323723500e83E202A7C96CC;
     
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds; 
@@ -75,7 +75,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
         uint256 _price,
         string memory tokenURI) 
         public returns (uint256) { 
-        require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");        
+        //require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");        
         // require(
         //     _price + royaltyFedd<= msg.value,
         //     "Deployer must pay royalty fee for each token listed on the marketplace"
@@ -136,7 +136,7 @@ contract MusicNFT is ERC721URIStorage , Ownable  {
     /* Allows someone to resell their music nft */
     function resellMusicToken(uint256 _tokenId, uint256 _price) external payable {
         //require(msg.value == royaltyFee, "Must pay royalty");
-        require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");
+        //require(SubscriptionContract(subscriptioncontract).isSubscriber(msg.sender), "You either need to subscribe first or renew your subscription.");
         require(_price > 0, "Price must be greater than zero");
         musicItems[_tokenId].price = _price;
         musicItems[_tokenId].seller = payable(msg.sender);
